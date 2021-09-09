@@ -1,4 +1,4 @@
-L'application est une application simple utilisant Flask et sqlite3.
+L'application est une application simple utilisant Flask et une base de données type MYQSL.
 
 Cette application à pour but d'utiliser les opérations basiques d'une bdd à savoir le CRUD (Create, Read, Update, Delete)
 
