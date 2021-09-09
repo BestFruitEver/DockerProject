@@ -1,66 +1,84 @@
-import os
+from fastapi import FastAPI, HTTPException, Depends
+from typing import List
+from pydantic import BaseModel,Field
+from sqlalchemy.sql.functions import user
+import databases
+import sqlalchemy
 
-from flask import Flask
-from flask import render_template
-from flask import request
-from flask import redirect
+DATABASE_URL ="sqlite:///./user.db"
 
-from flask_sqlalchemy import SQLAlchemy
+metadata = sqlalchemy.MetaData()
 
-project_dir = os.path.dirname(os.path.abspath(__file__))
-database_file = "sqlite:///{}".format(os.path.join(project_dir, "bookdatabase.db"))
+database = databases.Database(DATABASE_URL)
 
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = database_file
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+user = sqlalchemy.Table(
+    "user",
+    metadata,
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("prenom",sqlalchemy.String(500)),
+    sqlalchemy.Column("nom",sqlalchemy.String(500))
+)
 
-db = SQLAlchemy(app)
+engine = sqlalchemy.create_engine(
+    DATABASE_URL, connect_args={"check_same_thread": False}
+)
 
-class Book(db.Model):
-    title = db.Column(db.String(80), unique=True, nullable=False, primary_key=True)
+metadata.create_all(engine)
 
-    def __repr__(self):
-        return "<Title: {}>".format(self.title)
+app = FastAPI(title="Base RH")
 
+@app.on_event("startup")
+async def connect():
+    await database.connect()
 
-@app.route("/", methods=["GET", "POST"])
-def home():
-    books = None
-    if request.form:
-        try:
-            book = Book(title=request.form.get("title"))
-            db.session.add(book)
-            db.session.commit()
-        except Exception as e:
-            print("Failed to add book")
-            print(e)
-    books = Book.query.all()
-    return render_template("home.html", books=books)
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
 
+class User(BaseModel):
+    id: int
+    prenom: str
+    nom: str
 
-@app.route("/update", methods=["POST"])
-def update():
-    try:
-        newtitle = request.form.get("newtitle")
-        oldtitle = request.form.get("oldtitle")
-        book = Book.query.filter_by(title=oldtitle).first()
-        book.title = newtitle
-        db.session.commit()
-    except Exception as e:
-        print("Couldn't update book title")
-        print(e)
-    return redirect("/")
+class UserIn(BaseModel):
+    prenom: str = Field(...)
+    nom: str = Field(...)
 
+@app.post("/create/", response_model=User)
+async def create(u: UserIn = Depends()):
+    query = user.insert().values(
+        prenom = u.prenom,
+        nom = u.nom
+    )
+    record_id = await database.execute(query)
+    query = user.select().where(user.c.id == record_id)
+    row = await database.fetch_one(query)
+    return {**row}
 
-@app.route("/delete", methods=["POST"])
-def delete():
-    title = request.form.get("title")
-    book = Book.query.filter_by(title=title).first()
-    db.session.delete(book)
-    db.session.commit()
-    return redirect("/")
+@app.get("/user/{id}", response_model=User)
+async def get_one(id: int):
+    query = user.select().where(user.c.id == id)
+    users = await database.fetch_one(query)
+    return {**users}
 
+@app.get("/user/", response_model=List[User])
+async def get_all():
+    query = user.select()
+    all_get = await database.fetch_all(query)
+    return all_get
 
-#if __name__ == "__main__":
- #   db.create_all()
-  #  app.run(host='0.0.0.0', port=8087, debug=True)
+@app.put("/update/{id}", response_model=User)
+async def update(id: int, u: UserIn = Depends()):
+    query = user.update().where(user.c.id == id).values(
+        nom = u.nom,
+        prenom = u.prenom 
+    )
+    record_id = await database.execute(query)
+    query = user.select().where(user.c.id == record_id)
+    row = await database.fetch_one(query)
+    return {**row}
+
+@app.delete("/delete/{id}", response_model=User)
+async def delete(id: int):
+    query = user.delete().where(user.c.id == id)
+    await database.execute(query)
