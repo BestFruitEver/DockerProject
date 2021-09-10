@@ -1,39 +1,42 @@
 from fastapi import FastAPI, HTTPException, Depends
 from typing import List
 from pydantic import BaseModel,Field
+from sqlalchemy import create_engine
+from sqlalchemy.sql.expression import null
 from sqlalchemy.sql.functions import user
-import databases
+from time import sleep
 import sqlalchemy
+import uvicorn
 
-DATABASE_URL ="sqlite:///./user.db"
+DATABASE_URL = "mysql+mysqlconnector://{}:{}@{}:{}/{}".format('root', 'example', 'db', '3306', 'project')
 
 metadata = sqlalchemy.MetaData()
-
-database = databases.Database(DATABASE_URL)
 
 user = sqlalchemy.Table(
     "user",
     metadata,
-    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("id", sqlalchemy.Integer, primary_key=True, autoincrement=True),
     sqlalchemy.Column("prenom",sqlalchemy.String(500)),
     sqlalchemy.Column("nom",sqlalchemy.String(500))
 )
 
-engine = sqlalchemy.create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
+engine = create_engine(
+    DATABASE_URL, connect_args={}
 )
+
+print('Waiting for database...')
+while True:
+    try:
+        connection = engine.connect()
+        break
+    except Exception:
+        sleep(0.5)
+
+print('Found database')
 
 metadata.create_all(engine)
 
 app = FastAPI(title="Base RH")
-
-@app.on_event("startup")
-async def connect():
-    await database.connect()
-
-@app.on_event("shutdown")
-async def shutdown():
-    await database.disconnect()
 
 class User(BaseModel):
     id: int
@@ -41,44 +44,50 @@ class User(BaseModel):
     nom: str
 
 class UserIn(BaseModel):
-    prenom: str = Field(...)
-    nom: str = Field(...)
+    prenom: str
+    nom: str
 
-@app.post("/create/", response_model=User)
-async def create(u: UserIn = Depends()):
+@app.get("/")
+async def hello():
+    return {"Hello" : " World"}
+
+@app.post("/user/", response_model=User)
+async def create(u: UserIn):
     query = user.insert().values(
         prenom = u.prenom,
         nom = u.nom
     )
-    record_id = await database.execute(query)
+    record_id = connection.execute(query).inserted_primary_key[0]
     query = user.select().where(user.c.id == record_id)
-    row = await database.fetch_one(query)
-    return {**row}
+    row = connection.execute(query).fetchone()
+    return row
 
 @app.get("/user/{id}", response_model=User)
 async def get_one(id: int):
     query = user.select().where(user.c.id == id)
-    users = await database.fetch_one(query)
+    users = connection.execute(query).fetchone()
     return {**users}
 
 @app.get("/user/", response_model=List[User])
 async def get_all():
     query = user.select()
-    all_get = await database.fetch_all(query)
-    return all_get
+    return connection.execute(query).fetchall()
 
-@app.put("/update/{id}", response_model=User)
-async def update(id: int, u: UserIn = Depends()):
+@app.put("/user/{id}", response_model=User)
+async def update(id: int, u: UserIn):
     query = user.update().where(user.c.id == id).values(
         nom = u.nom,
         prenom = u.prenom 
     )
-    record_id = await database.execute(query)
-    query = user.select().where(user.c.id == record_id)
-    row = await database.fetch_one(query)
+    connection.execute(query)
+    query = user.select().where(user.c.id == id)
+    row = connection.execute(query).fetchone()
     return {**row}
 
-@app.delete("/delete/{id}", response_model=User)
+@app.delete("/user/{id}", response_model=User)
 async def delete(id: int):
     query = user.delete().where(user.c.id == id)
-    await database.execute(query)
+    connection.execute(query)
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

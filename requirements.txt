@@ -1,5 +1,5 @@
-fastapi
+fastapi[all]
 databases
 sqlalchemy
-pydantic
-typing
+aiomysql
+mysql-connector-python

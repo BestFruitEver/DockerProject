@@ -1,11 +1,12 @@
-FROM python:3.7
+FROM python:3
 
 WORKDIR /app
 
-COPY . /app
+COPY requirements.txt /app
 
 RUN pip install -r requirements.txt
 
-EXPOSE 8000
+COPY . /app
 
-CMD [ "python", "main.py"]
+EXPOSE 8000
+ENTRYPOINT [ "entrypoint.sh" ]
