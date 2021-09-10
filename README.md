@@ -11,4 +11,6 @@ A la racine on retrouve le fichier de requirements, le fichier dockerfile ainsi 
 Une fois l'application lancée, on peut retrouver les différentes actions dans l'url docs
 
 <h1> Diagramme </h1>
+<span>
 <img src="https://github.com/BestFruitEver/DockerProject/blob/master/screenshots/diagramme.png?raw=true" alt="diagramme.png">
+</span>
