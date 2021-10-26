@@ -30,7 +30,8 @@ while True:
         connection = engine.connect()
         break
     except Exception:
-        sleep(0.5)
+        sleep(1.5)
+        print("still waiting...")
 
 print('Found database')
 
@@ -47,10 +48,12 @@ class UserIn(BaseModel):
     prenom: str
     nom: str
 
+#Chemin de base quand rien n'est spécifié
 @app.get("/")
 async def hello():
     return {"Hello" : " World"}
 
+#Chemin et fonction pour créer un user
 @app.post("/user/", response_model=User)
 async def create(u: UserIn):
     query = user.insert().values(
@@ -62,17 +65,20 @@ async def create(u: UserIn):
     row = connection.execute(query).fetchone()
     return row
 
+#Sélectionner un user via son ID
 @app.get("/user/{id}", response_model=User)
 async def get_one(id: int):
     query = user.select().where(user.c.id == id)
     users = connection.execute(query).fetchone()
     return {**users}
 
+#Sélectionner tous les user
 @app.get("/user/", response_model=List[User])
 async def get_all():
     query = user.select()
     return connection.execute(query).fetchall()
 
+#Mettre à jour les informations d'un user
 @app.put("/user/{id}", response_model=User)
 async def update(id: int, u: UserIn):
     query = user.update().where(user.c.id == id).values(
@@ -84,6 +90,7 @@ async def update(id: int, u: UserIn):
     row = connection.execute(query).fetchone()
     return {**row}
 
+#Supprimer un user
 @app.delete("/user/{id}", response_model=User)
 async def delete(id: int):
     query = user.delete().where(user.c.id == id)

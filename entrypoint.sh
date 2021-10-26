@@ -7,6 +7,6 @@ do
   sleep 0.5
 done
 
-echo database found
+echo "database found"
 
-python3 main.py
+exec python3 main.py
